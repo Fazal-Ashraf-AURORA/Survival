@@ -32,7 +32,7 @@ public class PlayerController : MonoBehaviour {
 
 
     [Header("Player Animator")]
-    //[SerializeField] private float speedThreshold = 0.1f;
+    [SerializeField] private float speedThreshold = 0.1f;
     [SerializeField] private Animator playerAnimator;
     private string currentState;
 
@@ -55,9 +55,9 @@ public class PlayerController : MonoBehaviour {
     const string PLAYER_DEATH = "Death";
 
 
-    //[Header("Camera Tracking")]
-    //[SerializeField] private GameObject _cameraFollowGO;
-    //private CameraFollowObject _cameraFollowObject;
+    [Header("Camera Tracking")]
+    [SerializeField] private GameObject _cameraFollowGO;
+    private CameraFollowObject _cameraFollowObject;
 
 
     //flags
@@ -97,7 +97,7 @@ public class PlayerController : MonoBehaviour {
         Screen.sleepTimeout = SleepTimeout.NeverSleep;//this will make sure that our 
 
         Cursor.visible = false;
-        //_cameraFollowObject = _cameraFollowGO.GetComponent<CameraFollowObject>();
+        _cameraFollowObject = _cameraFollowGO.GetComponent<CameraFollowObject>();
     }
 
     void Update() {
@@ -245,13 +245,13 @@ public class PlayerController : MonoBehaviour {
             transform.rotation = Quaternion.Euler(rotator);
             isFacingRight = !isFacingRight;
 
-            //_cameraFollowObject.CallTurn();
+            _cameraFollowObject.CallTurn();
         } else {
             Vector3 rotator = new Vector3(transform.rotation.x, 0f, transform.rotation.z);
             transform.rotation = Quaternion.Euler(rotator);
             isFacingRight = !isFacingRight;
 
-            //_cameraFollowObject.CallTurn();
+            _cameraFollowObject.CallTurn();
         }
     }
 
