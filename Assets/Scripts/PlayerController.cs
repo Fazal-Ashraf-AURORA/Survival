@@ -1,3 +1,4 @@
+using Cinemachine;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -21,18 +22,13 @@ public class PlayerController : MonoBehaviour {
     [SerializeField] private float jumpBufferTime = 0.2f;//increasing will add buffer to the jump 
     private float jumpBufferCounter;
 
-    private float shotAnimationDelay = 0.833f;
-    private float attack1AnimationDelay = 0.500f;
-    private float attack2AnimationDelay = 0.500f;
+    private float shotAnimationDelay = 1.0f;
+    private float attack1AnimationDelay = 0.600f;
+    private float attack2AnimationDelay = 0.300f;
 
-    private float rechargeAnimationDelay = 1.042f;
-    //private float rechargeAnimationDelay = 1.042f * 5;
-
-    //private float jumpDelay;
-
+    private float rechargeAnimationDelay = 1.500f;
 
     [Header("Player Animator")]
-    [SerializeField] private float speedThreshold = 0.1f;
     [SerializeField] private Animator playerAnimator;
     private string currentState;
 
@@ -58,6 +54,10 @@ public class PlayerController : MonoBehaviour {
     [Header("Camera Tracking")]
     [SerializeField] private GameObject _cameraFollowGO;
     private CameraFollowObject _cameraFollowObject;
+    public CinemachineVirtualCamera virtualCamera;
+    float currentOrthoSize;
+    float normalOrtho = 3.6f;
+    float runningOrtho = 5.5f;
 
 
     //flags
@@ -91,16 +91,30 @@ public class PlayerController : MonoBehaviour {
     [Header("References")]
     [SerializeField] private Rigidbody2D rigidbody2d;
 
+    private Gamepad gamepad;
+    
+    private bool canRun;
+    private GameObject pumpkinPortal; // Reference to the Pumpkin portal GameObject
+
 
     private void Start() {
+        currentOrthoSize = virtualCamera.m_Lens.OrthographicSize;
+        currentOrthoSize = normalOrtho;
         Application.targetFrameRate = 60;// limiting in-game FPS to 60
         Screen.sleepTimeout = SleepTimeout.NeverSleep;//this will make sure that our 
 
         Cursor.visible = false;
         _cameraFollowObject = _cameraFollowGO.GetComponent<CameraFollowObject>();
+        pumpkinPortal = GameObject.Find("Pumpkin Portal"); // Find the Pumpkin portal GameObject by name
+
+        // Get the first connected gamepad
+        if (Gamepad.all.Count > 0) {
+            gamepad = Gamepad.all[0];
+        }
     }
 
     void Update() {
+        //Debug.Log("Current ortho size: " + currentOrthoSize);
         if (IsGrounded()) {
             coyoteTimeCounter = coyoteTime;
         } else {
@@ -120,21 +134,37 @@ public class PlayerController : MonoBehaviour {
             }
         } else {
             jumpBufferCounter -= Time.deltaTime;
-        }
+        }        
     }
 
     private void FixedUpdate() {
 
-        if ( !IsShotFiring) {
+        if ( !IsShotFiring ) {
             rigidbody2d.velocity = new Vector2(horizontalMovementInput * playerWalkSpeed, rigidbody2d.velocity.y);
         }
 
-        if (!IsShotFiring && IsRunning) {
+        if (!IsShotFiring && IsRunning && canRun) {
             rigidbody2d.velocity = new Vector2(horizontalMovementInput * playerRunSpeed, rigidbody2d.velocity.y);
         }
 
         if (horizontalMovementInput > 0f || horizontalMovementInput < 0f) {
             TurnCheck();
+        }
+
+        if (pumpkinPortal != null) {
+            float distanceToPortal = Vector3.Distance(transform.position, pumpkinPortal.transform.position);
+            if (distanceToPortal < 4f) {
+                canRun = false; // Disable running if player is too close to the portal             
+            } else {
+                canRun = true; // Enable running if player is far enough from the portal
+            }
+        }
+
+        // Update orthographic size of the virtual camera based on whether the player is running or not
+        if (IsRunning) {
+            virtualCamera.m_Lens.OrthographicSize = Mathf.Lerp(virtualCamera.m_Lens.OrthographicSize, runningOrtho, Time.fixedDeltaTime * 2f); // Adjust the interpolation speed as needed
+        } else {
+            virtualCamera.m_Lens.OrthographicSize = Mathf.Lerp(virtualCamera.m_Lens.OrthographicSize, normalOrtho, Time.fixedDeltaTime * 2f); // Adjust the interpolation speed as needed
         }
     }
 
@@ -274,18 +304,14 @@ public class PlayerController : MonoBehaviour {
         var velocity = rigidbody2d.velocity;
         var yVelocity = velocity.y;
 
-        // Check if the player is grounded and was jumping
-        if (IsGrounded() && yVelocity < 0f && isJumping) {
-            Debug.Log("GG");
-            // Trigger landing animation
-            ChangeAnimationState(PLAYER_LAND);
-            
-        }
+        
 
-        if (IsGrounded() && NotAttacking()) {
+        if (IsGrounded() && NotAttacking() && !isJumping) {
             if (velocity.x != 0f && !IsRunning) {
+                //currentOrthoSize = normalOrtho;
                 ChangeAnimationState(PLAYER_WALK);
             } else if (velocity.x != 0f && IsRunning) {
+                //currentOrthoSize = runningOrtho;
                 ChangeAnimationState(PLAYER_RUN);
             } else {
                 ChangeAnimationState(PLAYER_IDLE);
@@ -308,6 +334,10 @@ public class PlayerController : MonoBehaviour {
                 FreezeX();
 
                 if (IsGrounded()) {
+                    // Trigger rumble with intensity 0.5 for 0.2 seconds
+                    gamepad.SetMotorSpeeds(1f, 1f);
+                    // Stop rumble after 0.2 seconds
+                    StartCoroutine(StopRumble(.24f));
                     ChangeAnimationState(PLAYER_SHOT);
                 }
                 Invoke("ShotFiringComplete", shotAnimationDelay);
@@ -376,6 +406,7 @@ public class PlayerController : MonoBehaviour {
         IsShotFiring = false;
         // Reset Rigidbody constraints after shot animation completes
         UnFreezeX();
+        
     }
 
     void Attack1Complete() {
@@ -403,7 +434,10 @@ public class PlayerController : MonoBehaviour {
         SceneManager.LoadScene("Gameplay");
     }
     private void OnCollisionEnter2D(Collision2D collision) {
-        
+        // Trigger rumble with intensity 0.5 for 0.2 seconds
+        gamepad.SetMotorSpeeds(0.5f, 0.9f);
+        // Stop rumble after 0.2 seconds
+        StartCoroutine(StopRumble(0.2f));
     }
     private void Die() {
         death = true;
@@ -416,4 +450,12 @@ public class PlayerController : MonoBehaviour {
     void UnFreezeX() {
         rigidbody2d.constraints = RigidbodyConstraints2D.FreezeRotation;
     }
+
+    private IEnumerator StopRumble(float duration) {
+        yield return new WaitForSeconds(duration);
+        // Stop rumble
+        gamepad.SetMotorSpeeds(0, 0);
+    }
+
+    
 }
